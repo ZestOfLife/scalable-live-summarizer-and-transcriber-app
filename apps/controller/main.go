@@ -11,6 +11,7 @@ import (
 
 type server struct {
 	pb.UnimplementedGreeterService
+	Writer *kafka.Writer
 }
 
 func (*s server) ProcessMedia(stream pb.InferenceService_ProcessMediaServer) error {
@@ -36,6 +37,18 @@ func (*s server) ProcessMedia(stream pb.InferenceService_ProcessMediaServer) err
 }
 
 func main() {
+	// Kafka config
+	brokers := strings.Split(os.Getenv("KAFKA_BROKERS"), ",")
+	topic := os.Getenv("KAFKA_TOPIC")
+
+	writer := &kafka.Writer{
+		Addr:     kafka.TCP(brokers...),
+		Topic:    topic,
+		Balancer: &kafka.LeastBytes{},
+	}
+	defer w.Close()
+
+
 	listner, err := net.Listen("tcp", ":8080")
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
@@ -43,7 +56,7 @@ func main() {
 
 	s := grpc.NewServer()
 
-	pb.RegisterGreeterserver(s, &server{})
+	pb.RegisterYourServiceServer(s, &server{Writer: writer})
 
 	log.Printf("Server listening at %v", listner.Addr())
 
