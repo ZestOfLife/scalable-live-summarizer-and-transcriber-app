@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net"
+	"os"
 
 	"google.golang.org/grpc"
 	pb "./proto/stream"
@@ -30,9 +31,9 @@ func (*s server) ProcessMedia(stream pb.InferenceService_ProcessMediaServer) err
 	case *pb.MediaStreamRequest_SeekRequest:
 		// TODO
 	case *pb.MediaStreamRequest_Video:
-		// TODO
+		fallthrough
 	case *pb.MediaStreamRequest_Audio:
-		// TODO
+		go SendToQueue(s.Writer, CompressData(payload.data), payload.id, paylod.timestamp_start, payload.timestamp_end)
 	}
 }
 
