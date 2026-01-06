@@ -37,10 +37,7 @@ func (*s Server) ProcessMedia(stream pb.InferenceService_ProcessMediaServer) (*p
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
-		req := &pb.MediaStreamRequest{
-			Payload: payload,
-		}
-		res, err := s.Client.SendMedia(ctx, req)
+		res, err := s.Client.SendMedia(ctx, payload)
 		if err != nil {
 			ret := &pb.Success {
 				Success: false,
@@ -64,7 +61,7 @@ func (*s Server) ProcessMedia(stream pb.InferenceService_ProcessMediaServer) (*p
 func main() {
 	conn, err := grpc.Dial(os.Getenv("COMMAND_SERVER_ADDR") + ":" + os.Getenv("COMMAND_SERVER_PORT"), grpc.WithTransportCredentials(insecure.NewCredentials())) 
 	if err != nil {
-		log.Fatalf("did not connect: %v", err)
+		log.Fatalf("Did not connect: %v", err)
 	}
 	defer conn.Close()
 
