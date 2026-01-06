@@ -1,3 +1,5 @@
+package main
+
 import (
 	"context"
 	"crypto/rand"
@@ -5,7 +7,7 @@ import (
 	"net"
 	"testing"
 
-	pb "../../api/stream"
+	pb "github.com/ZestOfLife/scalable-live-summarizer-and-transcriber-app/api/stream"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"

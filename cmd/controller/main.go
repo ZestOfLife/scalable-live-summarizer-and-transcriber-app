@@ -7,7 +7,7 @@ import (
 	"os"
 
 	"google.golang.org/grpc"
-	pb "../../api/stream"
+	pb "github.com/ZestOfLife/scalable-live-summarizer-and-transcriber-app/api/stream"
 )
 
 type Server struct {
