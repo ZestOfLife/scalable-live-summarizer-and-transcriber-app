@@ -1,12 +1,12 @@
 package main;
 
 import (
-	"githut.com/klauspost/compress/zstd"
+	"github.com/klauspost/compress/zstd"
 )
 
 var encoder, _ = zstd.NewWriter(nil)
 
-func CompressData(bytes[] data) bytes[] {
+func CompressData(data []byte) []byte {
 	compressed := encoder.EncodeAll(data, make([]byte, 0, len(data)))
 	return compressed
 }

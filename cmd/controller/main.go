@@ -2,60 +2,60 @@ package main
 
 import (
 	"context"
+	"io"
 	"log"
 	"net"
 	"os"
+	"time"
 
 	"google.golang.org/grpc"
-	pb "github.com/ZestOfLife/scalable-live-summarizer-and-transcriber-app/api/stream"
+	"google.golang.org/grpc/credentials/insecure"
+	pb "github.com/ZestOfLife/scalable-live-summarizer-and-transcriber-app/api"
 )
 
 type Server struct {
-	pb.UnimplementedGreeterService
-	Client ChatServiceClient
+	pb.UnimplementedInferenceServiceServer
+	Client pb.InferenceServiceClient
 }
 
-func (*s Server) ProcessMedia(stream pb.InferenceService_ProcessMediaServer) (*pb.Success, error) {
+func (s *Server) ProcessMedia(stream pb.InferenceService_ProcessMediaServer) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	clientStream, err := s.Client.ProcessMedia(ctx)
+    	if err != nil {
+        	return err
+    	}
+
 	for {
 		req, err := stream.Recv()
 		if err != nil {
 			if err == io.EOF {
-				return nil
+				res, err := clientStream.CloseAndRecv()
+            			if err != nil {
+                			return err
+            			}
+				return stream.SendAndClose(res)
 			} else {
-				retrun err
+				return err
 			}
 		}
-	}
+	
 
-	switch payload := req.Payload.(type) {
-	case *pb.MediaStreamRequest_Video:
-		fallthrough
-	case *pb.MediaStreamRequest_Audio:
-		payload.Data = CompressData(payload.Data)
-		fallthrough
-	case *pb.MediaStreamRequest_SeekRequest:
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
+		switch payload := req.Payload.(type) {
+		case *pb.MediaStreamRequest_Video:
+			payload.Video.Data = CompressData(payload.Video.Data)
+		case *pb.MediaStreamRequest_Audio:
+			payload.Audio.Data = CompressData(payload.Audio.Data)
+		case *pb.MediaStreamRequest_Seek:
+			// Do nothing cause this will be handled by the model server
+		}	
 
-		res, err := s.Client.SendMedia(ctx, payload)
-		if err != nil {
-			ret := &pb.Success {
-				Success: false,
-			}
-			return ret, err
-		}
-
-		if !res.success {
-			ret := &pb.Success {
-				Success: false,
-			}
-			return ret, nil
+		errClient := clientStream.Send(req)
+		if errClient != nil {
+			return errClient
 		}
 	}
-	ret := &pb.Success {
-		Success: true,
-	}
-	return ret, nil
 }
 
 func main() {
@@ -65,15 +65,21 @@ func main() {
 	}
 	defer conn.Close()
 
-	c := pb.NewChatServiceClient(conn)
+	listener, err := net.Listen("tcp", ":" + os.Getenv("CONTROLLER_PORT")) 
+    	if err != nil {
+        	log.Fatalf("Failed to listen on port 50051: %v", err)
+    	}
+
+	c := pb.NewInferenceServiceClient(conn)
 	s := grpc.NewServer()
 
-	pb.RegisterYourServiceServer(s, &Server{Client: c})
+	pb.RegisterInferenceServiceServer(s, &Server{Client: c})
 
-	log.Printf("Server listening at %v", listner.Addr())
+
+	log.Printf("Server listening at %v", listener.Addr())
 
 	// Serve
-	if err := s.Serve(listner); err != nil {
+	if err := s.Serve(listener); err != nil {
 		log.Fatalf("Failed to serve: %v", err)
 	}
 }
