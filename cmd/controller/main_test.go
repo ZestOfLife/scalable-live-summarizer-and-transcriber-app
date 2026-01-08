@@ -3,36 +3,74 @@ package main
 import (
 	"context"
 	"crypto/rand"
-	"fmt"
-	"net"
+	"io"
 	"testing"
+	"time"
 
-	pb "github.com/ZestOfLife/scalable-live-summarizer-and-transcriber-app/api/stream"
+	pb "github.com/ZestOfLife/scalable-live-summarizer-and-transcriber-app/api"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
+	"github.com/google/uuid"
 )
 
 // Setup
 const BUFSIZE = 64 * 1024
+var listener *bufconn.Listener
 
-func setupServer() *grpc.Server {
-	listner := bufcon.Listen(BUFSIZE)
-	s := grpc.NewServer()
-
-	return s
+// Mock Client
+type MockInferenceClient struct {
+	mock.Mock
+	pb.InferenceServiceClient
 }
 
-func setupClient(t *testing.T) (*pb.MockChatServiceClient, func()) {
-    ctrl := gomock.NewController(t)
-    mock := pb.NewMockChatServiceClient(ctrl)
-    
-    return mock, func() { ctrl.Finish() }
+
+func (m *MockInferenceClient) ProcessMedia(ctx context.Context, opts ...grpc.CallOption) (pb.InferenceService_ProcessMediaClient, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(pb.InferenceService_ProcessMediaClient), args.Error(1)
 }
 
-func bufDialer(context.Context, string) (net.Conn, error) {
-	return lis.Dial()
+//Mock Stream
+type MockInferenceStream struct {
+    pb.InferenceService_ProcessMediaClient
+    mock.Mock
+}
+
+func (m *MockInferenceStream) Send(req *pb.MediaStreamRequest) error {
+    args := m.Called(req)
+    return args.Error(0)
+}
+
+func (m *MockInferenceStream) CloseAndRecv() (*pb.Success, error) {
+    args := m.Called()
+    return args.Get(0).(*pb.Success), args.Error(1)
+}
+
+// Mock Server
+type MockProcessMediaServer struct {
+	pb.InferenceService_ProcessMediaServer
+	// Req channel
+	Requests chan *pb.MediaStreamRequest
+	// Response
+	Response *pb.Success
+}
+
+func (m *MockProcessMediaServer) Recv() (*pb.MediaStreamRequest, error) {
+	req, ok := <-m.Requests
+	if !ok {
+		return nil, io.EOF
+	}
+	return req, nil
+}
+
+func (m *MockProcessMediaServer) SendAndClose(res *pb.Success) error {
+	m.Response = res
+	return nil
+}
+
+func (m *MockProcessMediaServer) Context() context.Context {
+	return context.Background()
 }
 
 func generateRandomBytes(size int) ([]byte, error) {
@@ -44,47 +82,69 @@ func generateRandomBytes(size int) ([]byte, error) {
 	return blk, nil
 }
 
-func generateUUID() (string, time.Time) {
-	return uuid.NewString(), time.Now()
+func generateUUID() (string, int64) {
+	return uuid.NewString(), time.Now().UnixMilli()
 }
+
 
 // Tests
 func TestCreateProcessMedia(t *testing.T) {
-	s := setupServer()
-	c, cleanup := setupClient(t)
-	defer cleanup()
+	c := new(MockInferenceClient)
 
-	pb.RegisterYourServiceServer(s, &Server{Client: c})
+	stream := new(MockInferenceStream)
 
-	uuid, ts := generateUUID()
+	c.On("ProcessMedia", mock.Anything, mock.Anything).Return(stream, nil)
+	stream.On("Send", mock.Anything).Return(nil)
+	stream.On("CloseAndRecv").Return(&pb.Success{Success: true}, nil)
+
+	s := &Server{Client: c}
+
+	mockStream := &MockProcessMediaServer {
+		Requests: make(chan *pb.MediaStreamRequest, 3),
+	}
+
+	id, ts := generateUUID()
 	videoData, _ := generateRandomBytes(BUFSIZE)
-	audioData, _ := generateRandomBytes(BUFSIZE)
+	audioData, _ := generateRandomBytes(BUFSIZE) 
 
-	videoChunkRequest := &pb.VideoChunk {
-		Id: uuid,
-		Data: videoData,
-		timestamp_start: ts,
-		timestamp_end: ts+300,
-	}
-	audioChunkRequest := &pb.AudioChunk {
-		Id: uuid,
-		Data: audioData,
-		TimestampStart: ts,
-		TimestampEnd: ts+300,
-	}
-	seekRequest := &pb.SeekRequest {
-		Id: uuid,
-		TimestampSeek: ts+333,
+	chunks := []*pb.MediaStreamRequest {
+		{
+			Payload: &pb.MediaStreamRequest_Video {
+				Video: &pb.VideoChunk {
+					Id: id,
+					Data: videoData,
+					TimestampStart: ts,
+					TimestampEnd: ts+300,
+				},
+			}, 
+		},
+		{
+			Payload: &pb.MediaStreamRequest_Audio {
+				Audio: &pb.AudioChunk {
+					Id: id,
+					Data: audioData,
+					TimestampStart: ts,
+					TimestampEnd: ts+300,
+				},
+			},
+		},
+		{
+			Payload: &pb.MediaStreamRequest_Seek {
+				Seek: &pb.SeekRequest {
+					Id: id,
+					TimestampSeek: ts+333,
+				},
+			},
+		},
 	}
 
-	res1, err1 := s.ProcessMedia(context.Background(), videoChunkRequest)
-	res2, err2 := s.ProcessMedia(context.Background(), audioChunkRequest)
-	res3, err3 := s.ProcessMedia(context.Background(), seekRequest)
+	for _, c := range chunks {
+		mockStream.Requests <- c
+	}
+	close(mockStream.Requests)
 
-	if err1 != nil || err2 != nill || err3 != nil {
-		t.Fatalf("Unexpected error returned: %v\n%v\n%v\n", err1, err2, err3)
-	}
-	if !res1.Success || !res2.Success || !res3.Success {
-		t.Errorf("Something went wrong... Video Chunk returned %v, Audio Chunk returned %v, and Seek Request returned %v", res1.Success, res2.Success, res3.Success)
-	}
+	err := s.ProcessMedia(mockStream)
+	assert.NoError(t, err)
+    	c.AssertExpectations(t)
+    	stream.AssertExpectations(t)	
 }
