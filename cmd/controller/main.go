@@ -67,7 +67,7 @@ func main() {
 
 	listener, err := net.Listen("tcp", ":" + os.Getenv("CONTROLLER_PORT")) 
     	if err != nil {
-        	log.Fatalf("Failed to listen on port 50051: %v", err)
+        	log.Fatalf("Failed to listen on port %v: %v", os.Getenv("CONTROLLER_PORT"), err)
     	}
 
 	c := pb.NewInferenceServiceClient(conn)

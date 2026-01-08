@@ -145,6 +145,6 @@ func TestCreateProcessMedia(t *testing.T) {
 
 	err := s.ProcessMedia(mockStream)
 	assert.NoError(t, err)
-    	c.AssertExpectations(t)
-    	stream.AssertExpectations(t)	
+	c.AssertExpectations(t)
+	stream.AssertExpectations(t)	
 }
