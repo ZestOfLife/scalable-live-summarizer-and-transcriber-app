@@ -1,28 +1,32 @@
 package main
 
 import (
-	"context"
 	"io"
 	"log"
 	"net"
 	"os"
 	"strings"
-	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
+	"google.golang.org/protobuf/proto"
 	pb "github.com/ZestOfLife/scalable-live-summarizer-and-transcriber-app/api"
 )
 
-type Server struct {
-	pb.UnimplementedInferenceServiceServer
-	w *kafka.Writer
+type KafkaProducerInterface interface {
+	Produce(msg *kafka.Message, deliveryChan chan kafka.Event) error
+	Close()
 }
 
-func SendToQueue(w *Kafka.Writer, req_type string, data any) error {
+type Server struct {
+	pb.UnimplementedInferenceServiceServer
+	Producer KafkaProducerInterface
+}
+
+func SendToQueue(p KafkaProducerInterface, req_type string, data []byte) error {
 	topic := os.Getenv("KAFKA_TOPIC_"+strings.ToUpper(req_type))
-	return writer.Produce(&kafka.Message{
-		TopicPartition: kaffka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny}
+	return p.Produce(&kafka.Message{
+		TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
 		Value:          data,
 		Headers: []kafka.Header{
 			{Key: "content-type", Value: []byte("application/protobuf")},
@@ -45,21 +49,33 @@ func (s *Server) ProcessMedia(stream pb.InferenceService_ProcessMediaServer) err
 
 		switch payload := req.Payload.(type) {
 		case *pb.MediaStreamRequest_Video:
-			err := SendToQueue(s.w, "video", payload.Video)
-			if err != nil {
-				reutrn err
-			}
-		case *pb.MediaStreamRequest_Audio:
-			err := SendToQueue(s.w, "audio", payload.Audio)
-			if err != nil {
-				return err
-			}
-		case *pb.MediaStreamRequest_Seek:
-			err1 := SendToQueue(s.w, "video", payload.Seek)
-			err2 := SendToQueue(s.w, "audio", payload.Seek)
+			data, err1 := proto.Marshal(payload.Video)
 			if err1 != nil {
 				return err1
-			} else if err2 != nil {
+			}
+			err2 := SendToQueue(s.Producer, "video", data)
+			if err2 != nil {
+				return err2
+			}
+		case *pb.MediaStreamRequest_Audio:
+			data, err1 := proto.Marshal(payload.Audio)
+			if err1 != nil {
+				return err1
+			}
+			err2 := SendToQueue(s.Producer, "audio", data)
+			if err2 != nil {
+				return err2
+			}
+		case *pb.MediaStreamRequest_Seek:
+			data, err1 := proto.Marshal(payload.Seek)
+			if err1 != nil {
+				return err1
+			}
+			err2 := SendToQueue(s.Producer, "video", data)
+			err3 := SendToQueue(s.Producer, "audio", data)
+			if err2 != nil {
+				return err1
+			} else if err3 != nil {
 				return err2
 			}
 		}
@@ -68,23 +84,24 @@ func (s *Server) ProcessMedia(stream pb.InferenceService_ProcessMediaServer) err
 }
 
 func main() {
-	brokers := strings.Split(os.Getenv("KAFKA_BROKERS"), ",")
-
-	w := &kafka.Writer {
-        	Addr:     kafka.TCP(brokers...),
-        	Balancer: &kafka.LeastBytes{},
+	config := &kafka.ConfigMap{
+		"bootstrap.servers": os.Getenv("KAFKA_BROKERS"),
+		"client.id":         "command-server",
+		"acks":              "all",
 	}
-    	defer w.Close()
+
+	p, err := kafka.NewProducer(config)
+	if err != nil {
+		log.Fatalf("Failed to create producer: %s", err)
+	}	
 	
 	listener, err := net.Listen("tcp", ":" + os.Getenv("CONTROLLER_PORT")) 
     	if err != nil {
         	log.Fatalf("Failed to listen on port %v: %v", os.Getenv("CONTROLLER_PORT"), err)
     	}
 
-	c := pb.NewInferenceServiceClient(conn)
 	s := grpc.NewServer()
-
-	pb.RegisterInferenceServiceServer(s, &Server{Client: w})
+	pb.RegisterInferenceServiceServer(s, &Server{Producer: p})
 
 
 	log.Printf("Server listening at %v", listener.Addr())
