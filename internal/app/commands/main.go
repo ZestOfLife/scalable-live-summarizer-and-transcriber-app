@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc"
@@ -18,46 +19,49 @@ type Server struct {
 	w *kafka.Writer
 }
 
+func SendToQueue(w *Kafka.Writer, req_type string, data any) error {
+	topic := os.Getenv("KAFKA_TOPIC_"+strings.ToUpper(req_type))
+	return writer.Produce(&kafka.Message{
+		TopicPartition: kaffka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny}
+		Value:          data,
+		Headers: []kafka.Header{
+			{Key: "content-type", Value: []byte("application/protobuf")},
+			{Key: "target-service", Value: []byte("model-"+req_type)},
+		},
+	}, nil)
+}
+
 func (s *Server) ProcessMedia(stream pb.InferenceService_ProcessMediaServer) error {
 	for {
 		req, err := stream.Recv()
 		if err != nil {
 			if err == io.EOF {
-				res, err := clientStream.CloseAndRecv()
-            			if err != nil {
-                			return err
-            			}
+				res := &pb.Success{Success: true}
 				return stream.SendAndClose(res)
 			} else {
 				return err
 			}
 		}
 
-		var req_type string
-		var data any
-
 		switch payload := req.Payload.(type) {
 		case *pb.MediaStreamRequest_Video:
-			req_type = "Video"
-			data = payload.Video
-		case *pb.MediaStreamRequest_Audio:
-			req_type = "Audio"
-			data = payload.Audio
-		case *pb.MediaStreamRequest_Seek:
-			req_type = "Seek"
-			data = payload.Seek
-		}
-
-		topic := os.Getenv("KAFKA_TOPIC")
-		err := writer.Produce(&kafka.Message{
-			TopicPartition: kaffka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny}
-			Value:          data,
-			Headers: []kafka.Header{
-				{Key: "type", Value: []byte(req_type)}
+			err := SendToQueue(s.w, "video", payload.Video)
+			if err != nil {
+				reutrn err
 			}
-		}, nil)
-		if err != nil {
-			return err
+		case *pb.MediaStreamRequest_Audio:
+			err := SendToQueue(s.w, "audio", payload.Audio)
+			if err != nil {
+				return err
+			}
+		case *pb.MediaStreamRequest_Seek:
+			err1 := SendToQueue(s.w, "video", payload.Seek)
+			err2 := SendToQueue(s.w, "audio", payload.Seek)
+			if err1 != nil {
+				return err1
+			} else if err2 != nil {
+				return err2
+			}
 		}
 	}
 
@@ -65,11 +69,9 @@ func (s *Server) ProcessMedia(stream pb.InferenceService_ProcessMediaServer) err
 
 func main() {
 	brokers := strings.Split(os.Getenv("KAFKA_BROKERS"), ",")
-	topic := os.Getenv("KAFKA_TOPIC")
 
 	w := &kafka.Writer {
         	Addr:     kafka.TCP(brokers...),
-        	Topic:    topic,
         	Balancer: &kafka.LeastBytes{},
 	}
     	defer w.Close()
