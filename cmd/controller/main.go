@@ -15,10 +15,18 @@ import (
 
 type Server struct {
 	pb.UnimplementedInferenceServiceServer
-	w *kafka.Writer
+	Client pb.InferenceServiceClient
 }
 
 func (s *Server) ProcessMedia(stream pb.InferenceService_ProcessMediaServer) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	clientStream, err := s.Client.ProcessMedia(ctx)
+    	if err != nil {
+        	return err
+    	}
+
 	for {
 		req, err := stream.Recv()
 		if err != nil {
@@ -32,48 +40,31 @@ func (s *Server) ProcessMedia(stream pb.InferenceService_ProcessMediaServer) err
 				return err
 			}
 		}
-
-		var req_type string
-		var data any
+	
 
 		switch payload := req.Payload.(type) {
 		case *pb.MediaStreamRequest_Video:
-			req_type = "Video"
-			data = payload.Video
+			payload.Video.Data = CompressData(payload.Video.Data)
 		case *pb.MediaStreamRequest_Audio:
-			req_type = "Audio"
-			data = payload.Audio
+			payload.Audio.Data = CompressData(payload.Audio.Data)
 		case *pb.MediaStreamRequest_Seek:
-			req_type = "Seek"
-			data = payload.Seek
-		}
+			// Do nothing cause this will be handled by the model server
+		}	
 
-		topic := os.Getenv("KAFKA_TOPIC")
-		err := writer.Produce(&kafka.Message{
-			TopicPartition: kaffka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny}
-			Value:          data,
-			Headers: []kafka.Header{
-				{Key: "type", Value: []byte(req_type)}
-			}
-		}, nil)
-		if err != nil {
-			return err
+		errClient := clientStream.Send(req)
+		if errClient != nil {
+			return errClient
 		}
 	}
-
 }
 
 func main() {
-	brokers := strings.Split(os.Getenv("KAFKA_BROKERS"), ",")
-	topic := os.Getenv("KAFKA_TOPIC")
-
-	w := &kafka.Writer {
-        	Addr:     kafka.TCP(brokers...),
-        	Topic:    topic,
-        	Balancer: &kafka.LeastBytes{},
+	conn, err := grpc.Dial(os.Getenv("COMMAND_SERVER_ADDR") + ":" + os.Getenv("COMMAND_SERVER_PORT"), grpc.WithTransportCredentials(insecure.NewCredentials())) 
+	if err != nil {
+		log.Fatalf("Did not connect: %v", err)
 	}
-    	defer w.Close()
-	
+	defer conn.Close()
+
 	listener, err := net.Listen("tcp", ":" + os.Getenv("CONTROLLER_PORT")) 
     	if err != nil {
         	log.Fatalf("Failed to listen on port %v: %v", os.Getenv("CONTROLLER_PORT"), err)
@@ -82,7 +73,7 @@ func main() {
 	c := pb.NewInferenceServiceClient(conn)
 	s := grpc.NewServer()
 
-	pb.RegisterInferenceServiceServer(s, &Server{Client: w})
+	pb.RegisterInferenceServiceServer(s, &Server{Client: c})
 
 
 	log.Printf("Server listening at %v", listener.Addr())
