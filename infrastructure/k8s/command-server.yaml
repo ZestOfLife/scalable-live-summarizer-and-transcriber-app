@@ -16,8 +16,10 @@ spec:
         env:
           - name: KAFKA_BOOTSTRAP_SERVERS
             value: "command-queue-cluster-kafka-bootstrap.kafka.svc:9092"
-          - name: COMMAND_TOPIC
-            value: "user-commands"
+          - name: KAFKA_TOPIC_VIDEO
+            value: "video-queue"
+          - name: KAFKA_TOPIC_AUDIO
+            value: "audio-queue"
         # Readiness Probe
         readinessProbe:
           httpGet:

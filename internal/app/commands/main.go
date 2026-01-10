@@ -85,7 +85,7 @@ func (s *Server) ProcessMedia(stream pb.InferenceService_ProcessMediaServer) err
 
 func main() {
 	config := &kafka.ConfigMap{
-		"bootstrap.servers": os.Getenv("KAFKA_BROKERS"),
+		"bootstrap.servers": os.Getenv("KAFKA_BOOTSTRAP_SERVERS"),
 		"client.id":         "command-server",
 		"acks":              "all",
 	}
@@ -95,9 +95,9 @@ func main() {
 		log.Fatalf("Failed to create producer: %s", err)
 	}	
 	
-	listener, err := net.Listen("tcp", ":" + os.Getenv("CONTROLLER_PORT")) 
+	listener, err := net.Listen("tcp", ":" + os.Getenv("COMMAND_SERVER_PORT")) 
     	if err != nil {
-        	log.Fatalf("Failed to listen on port %v: %v", os.Getenv("CONTROLLER_PORT"), err)
+        	log.Fatalf("Failed to listen on port %v: %v", os.Getenv("COMMAND_SERVER_PORT"), err)
     	}
 
 	s := grpc.NewServer()
