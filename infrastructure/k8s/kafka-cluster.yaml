@@ -43,7 +43,7 @@ spec:
                     - key: strimzi.io/name
                       operator: In
                       values:
-                        - my-cluster-kafka
+                        - command-queue-cluster-kafka
                 topologyKey: "kubernetes.io/hostname"
     resources:
       requests:
