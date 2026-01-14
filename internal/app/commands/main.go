@@ -10,7 +10,7 @@ import (
 	"google.golang.org/grpc"
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"google.golang.org/protobuf/proto"
-	pb "github.com/ZestOfLife/scalable-live-summarizer-and-transcriber-app/api"
+	pb "github.com/ZestOfLife/scalable-live-summarizer-and-transcriber-app/pkg/gen/proto/v1"
 )
 
 type KafkaProducerInterface interface {
@@ -23,7 +23,7 @@ type Server struct {
 	Producer KafkaProducerInterface
 }
 
-func SendToQueue(p KafkaProducerInterface, req_type string, data []byte) error {
+func SendToQueue(p KafkaProducerInterface, req_type string, id string, data []byte) error {
 	topic := os.Getenv("KAFKA_TOPIC_"+strings.ToUpper(req_type))
 	return p.Produce(&kafka.Message{
 		TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
@@ -53,7 +53,7 @@ func (s *Server) ProcessMedia(stream pb.InferenceService_ProcessMediaServer) err
 			if err1 != nil {
 				return err1
 			}
-			err2 := SendToQueue(s.Producer, "video", data)
+			err2 := SendToQueue(s.Producer, "video", payload.Video.Id, data)
 			if err2 != nil {
 				return err2
 			}
@@ -62,7 +62,7 @@ func (s *Server) ProcessMedia(stream pb.InferenceService_ProcessMediaServer) err
 			if err1 != nil {
 				return err1
 			}
-			err2 := SendToQueue(s.Producer, "audio", data)
+			err2 := SendToQueue(s.Producer, "audio", payload.Audio.Id, data)
 			if err2 != nil {
 				return err2
 			}
@@ -71,11 +71,8 @@ func (s *Server) ProcessMedia(stream pb.InferenceService_ProcessMediaServer) err
 			if err1 != nil {
 				return err1
 			}
-			err2 := SendToQueue(s.Producer, "video", data)
-			err3 := SendToQueue(s.Producer, "audio", data)
+			err2 := SendToQueue(s.Producer, "seek", payload.Seek.Id, data)	
 			if err2 != nil {
-				return err1
-			} else if err3 != nil {
 				return err2
 			}
 		}

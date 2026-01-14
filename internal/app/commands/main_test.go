@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/ZestOfLife/scalable-live-summarizer-and-transcriber-app/api"
+	pb "github.com/ZestOfLife/scalable-live-summarizer-and-transcriber-app/pkg/gen/proto/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc/test/bufconn"
@@ -95,6 +95,7 @@ func generateUUID() (string, int64) {
 func TestCreateProcessMedia(t *testing.T) {
 	t.Setenv("KAFKA_TOPIC_VIDEO", "video-command")
 	t.Setenv("KAFKA_TOPIC_AUDIO", "audio-command")
+	t.Setenv("KAFKA_TOPIC_SEEK", "seek-command")
 	t.Setenv("KAFKA_BROKERS", "localhost:9092")
 
 	k := new(MockKafkaProducer)
@@ -112,7 +113,7 @@ func TestCreateProcessMedia(t *testing.T) {
 	audioData, _ := generateRandomBytes(BUFSIZE)
 
 	k.On("Produce", mock.MatchedBy(func(m *kafka.Message) bool {
-        	return (*m.TopicPartition.Topic == "video-command" || *m.TopicPartition.Topic == "audio-command") && len(m.Value) > 0
+        	return (*m.TopicPartition.Topic == "video-command" || *m.TopicPartition.Topic == "audio-command" || *m.TopicPartition.Topic == "seek-command") && len(m.Value) > 0
     	}), mock.Anything).Return(nil)
 
 	chunks := []*pb.MediaStreamRequest {
