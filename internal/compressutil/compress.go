@@ -1,4 +1,4 @@
-package handler
+package compressutil
 
 import (
 	"github.com/klauspost/compress/zstd"

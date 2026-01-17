@@ -1,4 +1,4 @@
-package main
+package command_server
 
 import (
 	"context"
@@ -8,31 +8,32 @@ import (
 	"time"
 
 	pb "github.com/ZestOfLife/scalable-live-summarizer-and-transcriber-app/pkg/gen/proto/v1"
+	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc/test/bufconn"
-	"github.com/google/uuid"
-	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 )
 
 // Setup
 const BUFSIZE = 64 * 1024
+
 var listener *bufconn.Listener
 
-//Mock Stream
+// Mock Stream
 type MockInferenceStream struct {
-    pb.InferenceService_ProcessMediaClient
-    mock.Mock
+	pb.InferenceService_ProcessMediaClient
+	mock.Mock
 }
 
 func (m *MockInferenceStream) Send(req *pb.MediaStreamRequest) error {
-    args := m.Called(req)
-    return args.Error(0)
+	args := m.Called(req)
+	return args.Error(0)
 }
 
 func (m *MockInferenceStream) CloseAndRecv() (*pb.Success, error) {
-    args := m.Called()
-    return args.Get(0).(*pb.Success), args.Error(1)
+	args := m.Called()
+	return args.Get(0).(*pb.Success), args.Error(1)
 }
 
 // Mock Server
@@ -64,12 +65,12 @@ func (m *MockProcessMediaServer) Context() context.Context {
 // Mock Kafka
 
 type MockKafkaProducer struct {
-    mock.Mock
+	mock.Mock
 }
 
 func (m *MockKafkaProducer) Produce(msg *kafka.Message, deliveryChan chan kafka.Event) error {
-    args := m.Called(msg, deliveryChan)
-    return args.Error(0)
+	args := m.Called(msg, deliveryChan)
+	return args.Error(0)
 }
 
 func (m *MockKafkaProducer) Close() {
@@ -90,7 +91,6 @@ func generateUUID() (string, int64) {
 	return uuid.NewString(), time.Now().UnixMilli()
 }
 
-
 // Tests
 func TestCreateProcessMedia(t *testing.T) {
 	t.Setenv("KAFKA_TOPIC_VIDEO", "video-command")
@@ -104,7 +104,7 @@ func TestCreateProcessMedia(t *testing.T) {
 
 	s := &Server{Producer: k}
 
-	mockStream := &MockProcessMediaServer {
+	mockStream := &MockProcessMediaServer{
 		Requests: make(chan *pb.MediaStreamRequest, 3),
 	}
 
@@ -113,35 +113,35 @@ func TestCreateProcessMedia(t *testing.T) {
 	audioData, _ := generateRandomBytes(BUFSIZE)
 
 	k.On("Produce", mock.MatchedBy(func(m *kafka.Message) bool {
-        	return (*m.TopicPartition.Topic == "video-command" || *m.TopicPartition.Topic == "audio-command" || *m.TopicPartition.Topic == "seek-command") && len(m.Value) > 0
-    	}), mock.Anything).Return(nil)
+		return (*m.TopicPartition.Topic == "video-command" || *m.TopicPartition.Topic == "audio-command" || *m.TopicPartition.Topic == "seek-command") && len(m.Value) > 0
+	}), mock.Anything).Return(nil)
 
-	chunks := []*pb.MediaStreamRequest {
+	chunks := []*pb.MediaStreamRequest{
 		{
-			Payload: &pb.MediaStreamRequest_Video {
-				Video: &pb.VideoChunk {
-					Id: id,
-					Data: videoData,
+			Payload: &pb.MediaStreamRequest_Video{
+				Video: &pb.VideoChunk{
+					Id:             id,
+					Data:           videoData,
 					TimestampStart: ts,
-					TimestampEnd: ts+300,
-				},
-			}, 
-		},
-		{
-			Payload: &pb.MediaStreamRequest_Audio {
-				Audio: &pb.AudioChunk {
-					Id: id,
-					Data: audioData,
-					TimestampStart: ts,
-					TimestampEnd: ts+300,
+					TimestampEnd:   ts + 300,
 				},
 			},
 		},
 		{
-			Payload: &pb.MediaStreamRequest_Seek {
-				Seek: &pb.SeekRequest {
-					Id: id,
-					TimestampSeek: ts+333,
+			Payload: &pb.MediaStreamRequest_Audio{
+				Audio: &pb.AudioChunk{
+					Id:             id,
+					Data:           audioData,
+					TimestampStart: ts,
+					TimestampEnd:   ts + 300,
+				},
+			},
+		},
+		{
+			Payload: &pb.MediaStreamRequest_Seek{
+				Seek: &pb.SeekRequest{
+					Id:            id,
+					TimestampSeek: ts + 333,
 				},
 			},
 		},
@@ -154,5 +154,5 @@ func TestCreateProcessMedia(t *testing.T) {
 
 	err := s.ProcessMedia(mockStream)
 	assert.NoError(t, err)
-	stream.AssertExpectations(t)	
+	stream.AssertExpectations(t)
 }
