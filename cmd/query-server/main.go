@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/ZestOfLife/scalable-live-summarizer-and-transcriber-app/internal/transport/http/query_server"
+	query_server "github.com/ZestOfLife/scalable-live-summarizer-and-transcriber-app/internal/transport/http/query-server"
 	"github.com/redis/go-redis/v9"
 )
 

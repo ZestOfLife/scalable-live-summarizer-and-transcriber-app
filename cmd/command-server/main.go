@@ -5,7 +5,7 @@ import (
 	"net"
 	"os"
 
-	"github.com/ZestOfLife/scalable-live-summarizer-and-transcriber-app/internal/transport/grpc/command_server"
+	command_server "github.com/ZestOfLife/scalable-live-summarizer-and-transcriber-app/internal/transport/grpc/command-server"
 	pb "github.com/ZestOfLife/scalable-live-summarizer-and-transcriber-app/pkg/gen/proto/v1"
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"google.golang.org/grpc"
