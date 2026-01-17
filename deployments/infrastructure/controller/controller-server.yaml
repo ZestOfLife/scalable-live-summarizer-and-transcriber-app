@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller-server
+  namespace: apps
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: controller
+  template:
+    metadata:
+      labels:
+        app: controller
+    spec:
+      containers:
+      - name: controller
+        image: github.com/ZestOfLife/scalable-live-summarizer-and-transcriber-app/controller-server:latest
+        env:
+          - name: COMMAND_SERVER_ADDR
+            value: "command-service.apps.svc.cluster.local"
+          - name: COMMAND_SERVER_PORT
+            value: "9090"
+          - name: CONTROLLER_PORT
+            value: "9090"
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "512Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: controller-service
+spec:
+  selector:
+    app: controller
+  ports:
+    - name: grpc
+      port: 9090
+      targetPort: 9090
