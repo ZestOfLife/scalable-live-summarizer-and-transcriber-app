@@ -1,4 +1,4 @@
-package main
+package handler
 
 import (
 	"context"
@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/ZestOfLife/scalable-live-summarizer-and-transcriber-app/api"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/test/bufconn"
 	"github.com/google/uuid"
+	pb "github.com/ZestOfLife/scalable-live-summarizer-and-transcriber-app/pkg/gen/proto/v1"
 )
 
 // Setup

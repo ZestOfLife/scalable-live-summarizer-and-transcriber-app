@@ -20,6 +20,8 @@ spec:
             value: "video-queue"
           - name: KAFKA_TOPIC_AUDIO
             value: "audio-queue"
+          - name: KAFKA_TOPIC_SEEK
+            value: "seek-queue"
         # Readiness Probe
         readinessProbe:
           httpGet:
