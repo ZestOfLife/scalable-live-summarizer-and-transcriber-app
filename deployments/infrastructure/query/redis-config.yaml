@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+data:
+  redis.conf: |
+    maxmemory 512mb
+    maxmemory-policy allkeys-lru
+    appendonly yes
+    appendfsync everysec

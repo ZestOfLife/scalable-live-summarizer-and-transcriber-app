@@ -1,5 +1,5 @@
 syntax = "proto3";
-option go_package = "github.com/zestoflife/scalable-live-summarizer-and-transcriber-app";
+option go_package = "github.com/zestoflife/scalable-live-summarizer-and-transcriber-app/api;pb";
 
 message MediaStreamRequest {
   oneof payload {
@@ -28,11 +28,10 @@ message SeekRequest {
   int64 timestamp_seek = 2; // in ms
 }
 
-message DetectionResponse {
-  string label = 1;
-  float confidence = 2;
+message Success {
+  bool success = 1;
 }
 
 service InferenceService {
-  rpc ProcessMedia(stream MediaStreamRequest) returns (DetectionResponse);
+  rpc ProcessMedia(stream MediaStreamRequest) returns (Success) {}
 }
