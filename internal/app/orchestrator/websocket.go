@@ -2,11 +2,15 @@ package orchestrator
 
 import (
 	"container/list"
+	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 
+	query "github.com/ZestOfLife/scalable-live-summarizer-and-transcriber-app/internal/app/query/interfaces"
 	"github.com/gorilla/websocket"
+	"github.com/redis/go-redis/v9"
 )
 
 type WhisperResponse struct {
@@ -41,21 +45,28 @@ func (w *Worker) readResults(id string) {
 
 		var resp WhisperResponse
 		if err := json.Unmarshal(msg, &resp); err == nil && len(resp.Segments) > 0 {
+			ctx := context.Background()
+
 			currentIndex := len(resp.Segments) - 1
 			latestSeg := resp.Segments[currentIndex]
 
 			// Same segment
 			if currentIndex == user.lastCommittedIndex+1 {
 				user.activeText = latestSeg.Text
-				timestamp_start := user.timestampStart
 				if user.timestamps.Len() < 2 {
 					log.Println("ERROR: timestamp list does not have at least two elements")
 					return
 				}
 				user.timestamps.Remove(user.timestamps.Front())
 				timestamp_end := user.timestamps.Front().Value.(int64)
+				user.timestampLastRemoved = timestamp_end
 				user.timestamps.Remove(user.timestamps.Front())
-				// TODO: Write to redis
+
+				w.RedisClient.Publish(ctx, "transcription-"+id, query.TranscriptionResponse{
+					TimestampStart: user.timestampStart,
+					TimestampEnd:   user.timestampLastRemoved,
+					Transcription:  user.activeText,
+				})
 			}
 
 			// Pause detected (i.e. new segment)
@@ -69,8 +80,11 @@ func (w *Worker) readResults(id string) {
 					user.timestampStart = user.timestamps.Front().Value.(int64)
 				}
 
-				// TODO: write to redis
-
+				member := fmt.Sprintf("[start=%d end=%d] %s", timestamp_start, timestamp_end, finalizedSegment.Text)
+				w.RedisClient.ZAdd(ctx, "audio_segment", redis.Z{
+					Score:  float64(timestamp_end),
+					Member: member,
+				})
 				user.lastCommittedIndex = currentIndex - 1
 				user.activeText = latestSeg.Text
 			}
@@ -86,6 +100,9 @@ func (w *Worker) GetSession(id string, timestamp_start int64, timestamp_end int6
 	if exists {
 		user.timestamps.PushBack(timestamp_start)
 		user.timestamps.PushBack(timestamp_end)
+		if user.timestampStart == -1 {
+			user.timestampStart = user.timestamps.Front().Value.(int64)
+		}
 		return user.conn, nil
 	}
 

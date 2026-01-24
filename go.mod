@@ -36,6 +36,7 @@ require (
 	github.com/redis/go-redis/v9 v9.17.2 // indirect
 	github.com/rogpeppe/go-internal v1.8.0 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
+	github.com/triton-inference-server/client v0.0.0-20260113230448-7ae09282afcb // indirect
 	golang.org/x/crypto v0.44.0 // indirect
 	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/sys v0.38.0 // indirect

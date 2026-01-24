@@ -16,6 +16,7 @@ func SendToQueue(p KafkaProducerInterface, req_type string, id string, data []by
 	topic := os.Getenv("KAFKA_TOPIC_" + strings.ToUpper(req_type))
 	return p.Produce(&kafka.Message{
 		TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
+		Key:            []byte(id),
 		Value:          data,
 		Headers: []kafka.Header{
 			{Key: "content-type", Value: []byte("application/protobuf")},

@@ -27,12 +27,12 @@ func serveWebSocket(w http.ResponseWriter, r *http.Request, c *redis.Client) {
 	id := r.URL.Query().Get("id")
 	ctx := r.Context()
 
-	pubsub := c.Subscribe(ctx, "summary_"+id)
+	pubsub := c.Subscribe(ctx, "transcription-"+id, "summary-"+id)
 	defer pubsub.Close()
 
 	ch := pubsub.Channel()
 	for msg := range ch {
-		err := conn.WriteMessage(websocket.TextMessage, []byte(msg.Payload))
+		err := conn.WriteJSON(msg.Payload)
 		if err != nil {
 			break // Con closed
 		}
