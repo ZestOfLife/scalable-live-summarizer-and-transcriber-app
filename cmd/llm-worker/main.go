@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"log"
 	"os"
 	"os/signal"
@@ -11,7 +10,6 @@ import (
 	"github.com/IBM/sarama"
 	"github.com/ZestOfLife/scalable-live-summarizer-and-transcriber-app/internal/app/orchestrator"
 	triton "github.com/ZestOfLife/scalable-live-summarizer-and-transcriber-app/pkg/gen/triton_proto/v1"
-	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -38,24 +36,6 @@ func main() {
 	}
 	tritonClient := triton.NewGRPCInferenceServiceClient(tritonConn)
 
-	wsURL := "ws://" + os.Getenv("WHISPERLIVE_ADDR_IP") + ":" + os.Getenv("WHISPERLIVE_ADDR_PORT")
-	ws, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		log.Fatal("WebSocket dailup error:", err)
-	}
-	defer ws.Close()
-
-	// WhisperLive config
-	configWL := map[string]interface{}{
-		"uid":      "orchestrator",
-		"language": "en",
-		"task":     "transcribe",
-		"model":    "small",
-		"use_vad":  true,
-	}
-	configBytes, _ := json.Marshal(configWL)
-	ws.WriteMessage(websocket.TextMessage, configBytes)
-
 	// Kafka config
 	config := sarama.NewConfig()
 	config.Consumer.Group.Rebalance.GroupStrategies = []sarama.BalanceStrategy{sarama.NewBalanceStrategyRoundRobin()}
@@ -70,7 +50,7 @@ func main() {
 		log.Panicf("Error creating consumer group client: %v", err)
 	}
 
-	worker := &orchestrator.Worker{RedisClient: redisClient, TritonClient: tritonClient, WhisperLiveClient: ws}
+	worker := &orchestrator.Worker{RedisClient: redisClient, TritonClient: tritonClient}
 
 	go func() {
 		for {

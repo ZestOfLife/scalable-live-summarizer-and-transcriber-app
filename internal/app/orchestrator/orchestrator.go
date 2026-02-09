@@ -28,12 +28,11 @@ type UserSession struct {
 }
 
 type Worker struct {
-	Ready             chan bool
-	RedisClient       *redis.Client
-	TritonClient      triton.GRPCInferenceServiceClient
-	WhisperLiveClient *websocket.Conn
-	sessions          map[string]*UserSession
-	mu                sync.RWMutex
+	Ready        chan bool
+	RedisClient  *redis.Client
+	TritonClient triton.GRPCInferenceServiceClient
+	sessions     map[string]*UserSession
+	mu           sync.RWMutex
 }
 
 func (w *Worker) Setup(sarama.ConsumerGroupSession) error {

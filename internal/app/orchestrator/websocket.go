@@ -80,8 +80,9 @@ func (w *Worker) readResults(id string) {
 					user.timestampStart = user.timestamps.Front().Value.(int64)
 				}
 
+				key := fmt.Sprintf("id:%s:type:audio", id)
 				member := fmt.Sprintf("[start=%d end=%d] %s", timestamp_start, timestamp_end, finalizedSegment.Text)
-				w.RedisClient.ZAdd(ctx, "audio_segment", redis.Z{
+				w.RedisClient.ZAdd(ctx, key, redis.Z{
 					Score:  float64(timestamp_end),
 					Member: member,
 				})
