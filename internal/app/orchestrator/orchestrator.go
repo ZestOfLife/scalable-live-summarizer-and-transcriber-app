@@ -1,14 +1,12 @@
 package orchestrator
 
 import (
-	"container/list"
 	"log"
 	"os"
 	"sync"
 
 	"github.com/IBM/sarama"
 	triton "github.com/ZestOfLife/scalable-live-summarizer-and-transcriber-app/pkg/gen/triton_proto/v1"
-	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -18,21 +16,14 @@ var (
 	SEEK_TOPIC  = os.Getenv("KAFKA_TOPIC_SEEK")
 )
 
-type UserSession struct {
-	conn                 *websocket.Conn
-	timestampStart       int64
-	timestampLastRemoved int64
-	timestamps           *list.List
-	activeText           string
-	lastCommittedIndex   int
-}
-
 type Worker struct {
-	Ready        chan bool
-	RedisClient  *redis.Client
-	TritonClient triton.GRPCInferenceServiceClient
-	sessions     map[string]*UserSession
-	mu           sync.RWMutex
+	Ready         chan bool
+	RedisClient   *redis.Client
+	TritonClient  triton.GRPCInferenceServiceClient
+	AudioSessions map[string]*UserSession
+	VideoSessions map[string]*UserStream
+	audioMu       sync.RWMutex
+	videoMu       sync.RWMutex
 }
 
 func (w *Worker) Setup(sarama.ConsumerGroupSession) error {

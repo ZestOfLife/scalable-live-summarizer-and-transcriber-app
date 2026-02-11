@@ -13,6 +13,15 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+type UserSession struct {
+	conn                 *websocket.Conn
+	timestampStart       int64
+	timestampLastRemoved int64
+	timestamps           *list.List
+	activeText           string
+	lastCommittedIndex   int
+}
+
 type WhisperResponse struct {
 	UID      string `json:"uid"`
 	Status   string `json:"status"`
@@ -27,13 +36,13 @@ type WhisperResponse struct {
 }
 
 func (w *Worker) readResults(id string) {
-	user := w.sessions[id]
+	user := w.AudioSessions[id]
 	defer func() {
 		log.Printf("Closing read for id: %s", id)
 		user.conn.Close()
-		w.mu.Lock()
-		delete(w.sessions, id) // Cleanup
-		w.mu.Unlock()
+		w.audioMu.Lock()
+		delete(w.AudioSessions, id) // Cleanup
+		w.audioMu.Unlock()
 	}()
 
 	for {
@@ -94,9 +103,9 @@ func (w *Worker) readResults(id string) {
 }
 
 func (w *Worker) GetSession(id string, timestamp_start int64, timestamp_end int64) (*websocket.Conn, error) {
-	w.mu.RLock()
-	user, exists := w.sessions[id]
-	w.mu.RUnlock()
+	w.audioMu.RLock()
+	user, exists := w.AudioSessions[id]
+	w.audioMu.RUnlock()
 
 	if exists {
 		user.timestamps.PushBack(timestamp_start)
@@ -112,11 +121,11 @@ func (w *Worker) GetSession(id string, timestamp_start int64, timestamp_end int6
 }
 
 func (w *Worker) CreateSession(id string, timestamp_start int64, timestamp_end int64) (*websocket.Conn, error) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
+	w.audioMu.Lock()
+	defer w.audioMu.Unlock()
 
 	// Race cond
-	if user, exists := w.sessions[id]; exists {
+	if user, exists := w.AudioSessions[id]; exists {
 		return user.conn, nil
 	}
 
@@ -129,7 +138,7 @@ func (w *Worker) CreateSession(id string, timestamp_start int64, timestamp_end i
 	timestamps := list.New()
 	timestamps.PushBack(timestamp_start)
 	timestamps.PushBack(timestamp_end)
-	w.sessions[id] = &UserSession{conn: ws, timestampStart: timestamp_start, timestamps: timestamps, activeText: "", lastCommittedIndex: -1}
+	w.AudioSessions[id] = &UserSession{conn: ws, timestampStart: timestamp_start, timestamps: timestamps, activeText: "", lastCommittedIndex: -1}
 
 	config := map[string]interface{}{
 		"uid":      id,

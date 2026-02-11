@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"sync"
 
 	pb "github.com/ZestOfLife/scalable-live-summarizer-and-transcriber-app/pkg/gen/proto/v1"
 	triton "github.com/ZestOfLife/scalable-live-summarizer-and-transcriber-app/pkg/gen/triton_proto/v1"
@@ -18,11 +17,6 @@ import (
 )
 
 const BUF_SIZE = 1024 * 1024 // 1MB buffer
-
-var (
-	streams = make(map[string]*UserStream)
-	mu      sync.RWMutex
-)
 
 func (w *Worker) setupNewStream(id string, timestamp_start int64, timestamps *list.List) *UserStream {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -146,9 +140,9 @@ func (w *Worker) ProcessVideo(data []byte) error {
 	if err != nil {
 		return err
 	}
-	mu.RLock()
-	s, exists := streams[videoChunk.Id]
-	mu.RUnlock()
+	w.videoMu.RLock()
+	s, exists := w.VideoSessions[videoChunk.Id]
+	w.videoMu.RUnlock()
 
 	if !exists {
 		timestamps := list.New()

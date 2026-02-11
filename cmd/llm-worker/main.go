@@ -50,7 +50,7 @@ func main() {
 		log.Panicf("Error creating consumer group client: %v", err)
 	}
 
-	worker := &orchestrator.Worker{RedisClient: redisClient, TritonClient: tritonClient}
+	worker := &orchestrator.Worker{Ready: make(chan bool), RedisClient: redisClient, TritonClient: tritonClient, AudioSessions: make(map[string]*orchestrator.UserSession), VideoSessions: make(map[string]*orchestrator.UserStream)}
 
 	go func() {
 		for {
