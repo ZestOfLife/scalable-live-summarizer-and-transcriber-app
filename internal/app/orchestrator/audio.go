@@ -102,7 +102,7 @@ func (w *Worker) readResults(id string) {
 	}
 }
 
-func (w *Worker) GetSession(id string, timestamp_start int64, timestamp_end int64) (*websocket.Conn, error) {
+func (w *Worker) getSession(id string, timestamp_start int64, timestamp_end int64) (*websocket.Conn, error) {
 	w.audioMu.RLock()
 	user, exists := w.AudioSessions[id]
 	w.audioMu.RUnlock()
@@ -117,10 +117,10 @@ func (w *Worker) GetSession(id string, timestamp_start int64, timestamp_end int6
 	}
 
 	// If no session exists
-	return w.CreateSession(id, timestamp_start, timestamp_end)
+	return w.createSession(id, timestamp_start, timestamp_end)
 }
 
-func (w *Worker) CreateSession(id string, timestamp_start int64, timestamp_end int64) (*websocket.Conn, error) {
+func (w *Worker) createSession(id string, timestamp_start int64, timestamp_end int64) (*websocket.Conn, error) {
 	w.audioMu.Lock()
 	defer w.audioMu.Unlock()
 
