@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: triton-server
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+      - name: triton
+        image: nvcr.io/nvidia/tritonserver:24.12-py3
+        command: ["tritonserver"]
+        args: ["--model-repository=/models", "--model-control-mode=poll", "--repository-poll-secs=30"]
+        ports:
+        - containerPort: 8000 # HTTP
+        - containerPort: 8001 # gRPC
+        - containerPort: 8002 # For metrics
+        volumeMounts:
+        - name: s3-models
+          mountPath: /models
+      volumes:
+      - name: s3-models
+        persistentVolumeClaim:
+          claimName: s3-models-pvc
