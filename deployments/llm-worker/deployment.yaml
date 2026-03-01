@@ -1,24 +1,80 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: triton-server
+  name: llm-worker
 spec:
   replicas: 1
+  selector:
+    matchLabels:
+      app: llm-pipeline
   template:
+    metadata:
+      labels:
+        app: llm-pipeline
     spec:
       containers:
       - name: triton
         image: nvcr.io/nvidia/tritonserver:24.12-py3
-        command: ["tritonserver"]
-        args: ["--model-repository=/models", "--model-control-mode=poll", "--repository-poll-secs=30"]
-        ports:
-        - containerPort: 8000 # HTTP
-        - containerPort: 8001 # gRPC
-        - containerPort: 8002 # For metrics
+        args: ["tritonserver", "--model-repository=/models", "--model-control-mode=poll"]
+        resources:
+          limits:
+            nvidia.com/gpu: 1
+            memory: "16Gi"
         volumeMounts:
         - name: s3-models
           mountPath: /models
+        - name: dshm
+          mountPath: /dev/shm
+      - name: whisperlive
+        image: ghcr.io/collabora/whisperlive-gpu:latest
+        command: ["python3", "run_server.py"]
+        args: ["--port", "9090", "--backend", "tensorrt", "--model", "turbo"]
+        env:
+          - name: TRITON_SERVER_ADDR
+            value: "127.0.0.1"
+        volumeMounts:
+        - name: dshm
+          mountPath: /dev/shm
+      - name: llm-worker-app
+        image: ghcr.io/zestoflife/llm-worker:latest
+        env:
+          - name: KAFKA_TOPIC_VIDEO
+            value: "video-topic"
+          - name: KAFKA_TOPIC_AUDIO
+            value: "audio-topic"
+          - name: KAFKA_TOPIC_SEEKe
+            value: "seek-topic"
+          - name: WHISPERLIVE_ADDR_IP
+            value: "whisperlive"
+          - name: WHISPERLIVE_ADDR_PORT
+            value: "9090"
+          - name: TRITON_VISION_NAME
+            value: "llama-3.2-11B-Vision-Instruct"
+          - name: TRITON_SUMMARY_NAME
+            value: "qwen3-4B-Instruct-2507-FP8"
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8080
+          initialDelaySeconds: 20
       volumes:
       - name: s3-models
         persistentVolumeClaim:
           claimName: s3-models-pvc
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: "2Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: whisperlive-service
+spec:
+  selector:
+    app: whisperlive
+  ports:
+    - name: TCP
+      port: 9090
+      targetPort: 9090
+  type: ClusterIP

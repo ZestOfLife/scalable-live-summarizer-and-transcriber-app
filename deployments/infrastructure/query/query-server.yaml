@@ -1,17 +1,17 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: command-server
+  name: query-server
   namespace: apps
 spec:
   replicas: 2
   template:
     metadata:
       labels:
-        app: command-producer
+        app: query-producer
     spec:
       containers:
-      - name: command-app
+      - name: query-app
         image: github.com/ZestOfLife/scalable-live-summarizer-and-transcriber-app/query-server:latest
         env:
           - name: QUERY_PORT

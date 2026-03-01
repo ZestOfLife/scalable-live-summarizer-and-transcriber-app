@@ -86,7 +86,11 @@ func (w *Worker) setupNewStream(id string, timestamp_start int64, timestamps *li
 
 func (w *Worker) processVisionModel(id string, timestamp_start int64, timestamp_end int64, imageBytes []byte) {
 	// Prompt
-	fullPrompt := "<|image|><|begin_of_text|>" + os.Getenv("TRITON_VISION_SYSPROMPT")
+	sysPrompt, err := os.ReadFile("/sysprompts/vision.text")
+	if err != nil {
+		fmt.Errorf("An unexpected error: %v", err)
+	}
+	fullPrompt := "<|image|><|begin_of_text|>" + string(sysPrompt)
 	textData := make([]byte, 4+len(fullPrompt))
 	binary.LittleEndian.PutUint32(textData[0:4], uint32(len(fullPrompt)))
 	copy(textData[4:], []byte(fullPrompt))
@@ -115,13 +119,13 @@ func (w *Worker) processVisionModel(id string, timestamp_start int64, timestamp_
 	}
 
 	// Inference
-	response, err := w.TritonClient.ModelInfer(context.Background(), request)
-	if err != nil {
-		println("Error infering: %v", err)
-	}
-	text, err2 := parseTritonResponse(response)
+	response, err2 := w.TritonClient.ModelInfer(context.Background(), request)
 	if err2 != nil {
-		println("Error parsing response: %v", err)
+		fmt.Errorf("Error infering: %v", err2)
+	}
+	text, err3 := parseTritonResponse(response)
+	if err3 != nil {
+		fmt.Errorf("Error parsing response: %v", err3)
 	}
 	key := fmt.Sprintf("id:%s:type:visual", id)
 	member := fmt.Sprintf("[start=%d end=%d] %s", timestamp_start, timestamp_end, text)
